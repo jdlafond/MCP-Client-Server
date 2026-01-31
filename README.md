@@ -136,3 +136,6 @@ For a prototype with strict budgets, manual loop is often clearer:
   "sprint_ref": "Sprint 6",
   "prompt": "MEETING MINUTES...\n\nCreate user stories and tasks and add them to Sprint 6."
 }
+```
+### Starting the uvicorn app
+uvicorn mddain:app --reload --host <EC2_PUBLIC_IP> --port 8000
