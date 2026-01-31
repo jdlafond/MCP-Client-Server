@@ -1,7 +1,7 @@
 fastapi
-uvicorn
-python-multipart
+uvicorn[standard]
 pydantic
-mcp
-supabase
+httpx
 anthropic
+python-dotenv
+tenacity
