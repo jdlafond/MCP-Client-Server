@@ -127,51 +127,52 @@ class AgentOrchestrator:
                     tool_use_id = content_block["id"]
                 else:
                     continue
-                    # Add idempotency key for write operations
-                    if "idempotency_key" in self.registry.tools[tool_name].input_schema["properties"]:
-                        if "idempotency_key" not in tool_input:
-                            tool_input["idempotency_key"] = str(uuid.uuid4())
-                    
-                    # Dedupe check
-                    call_hash = hash_tool_call(tool_name, tool_input)
-                    call_hash_counts[call_hash] += 1
-                    
-                    if call_hash_counts[call_hash] > self.max_repeated_call_hash:
-                        warnings.append(f"Loop detected: {tool_name}")
-                        raise LoopDetectedError(f"Repeated call: {tool_name}")
-                    
-                    # Write budget check
-                    if tool_name.startswith("taiga_create"):
-                        write_calls += 1
-                        if write_calls > self.max_write_calls:
-                            warnings.append("Max write calls exceeded")
-                            raise BudgetExceededError("Write budget exceeded")
-                    
-                    total_tool_calls += 1
-                    
-                    # Execute tool
-                    try:
-                        logger.info(f"Calling tool: {tool_name}")
-                        result = self.registry.call_tool(
-                            tool_name,
-                            tool_input,
-                            user_permissions,
-                            taiga_client,
-                            idempotency_cache
-                        )
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": tool_use_id,
-                            "content": str(result)
-                        })
-                    except Exception as e:
-                        logger.error(f"Tool execution error: {e}")
-                        tool_results.append({
-                            "type": "tool_result",
-                            "tool_use_id": tool_use_id,
-                            "content": f"Error: {str(e)}",
-                            "is_error": True
-                        })
+                
+                # Add idempotency key for write operations
+                if "idempotency_key" in self.registry.tools[tool_name].input_schema["properties"]:
+                    if "idempotency_key" not in tool_input:
+                        tool_input["idempotency_key"] = str(uuid.uuid4())
+                
+                # Dedupe check
+                call_hash = hash_tool_call(tool_name, tool_input)
+                call_hash_counts[call_hash] += 1
+                
+                if call_hash_counts[call_hash] > self.max_repeated_call_hash:
+                    warnings.append(f"Loop detected: {tool_name}")
+                    raise LoopDetectedError(f"Repeated call: {tool_name}")
+                
+                # Write budget check
+                if tool_name.startswith("taiga_create"):
+                    write_calls += 1
+                    if write_calls > self.max_write_calls:
+                        warnings.append("Max write calls exceeded")
+                        raise BudgetExceededError("Write budget exceeded")
+                
+                total_tool_calls += 1
+                
+                # Execute tool
+                try:
+                    logger.info(f"Calling tool: {tool_name}")
+                    result = self.registry.call_tool(
+                        tool_name,
+                        tool_input,
+                        user_permissions,
+                        taiga_client,
+                        idempotency_cache
+                    )
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_id,
+                        "content": str(result)
+                    })
+                except Exception as e:
+                    logger.error(f"Tool execution error: {e}")
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_id,
+                        "content": f"Error: {str(e)}",
+                        "is_error": True
+                    })
             
             if not has_tool_use:
                 break
