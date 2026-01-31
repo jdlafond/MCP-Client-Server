@@ -110,12 +110,23 @@ class AgentOrchestrator:
             has_tool_use = False
             
             for content_block in response["content"]:
-                if content_block.get("type") == "tool_use":
+                # Handle both dict and object types from Anthropic SDK
+                if hasattr(content_block, 'type'):
+                    block_type = content_block.type
+                    if block_type == "tool_use":
+                        has_tool_use = True
+                        tool_name = content_block.name
+                        tool_input = content_block.input
+                        tool_use_id = content_block.id
+                    else:
+                        continue
+                elif isinstance(content_block, dict) and content_block.get("type") == "tool_use":
                     has_tool_use = True
                     tool_name = content_block["name"]
                     tool_input = content_block["input"]
                     tool_use_id = content_block["id"]
-                    
+                else:
+                    continue
                     # Add idempotency key for write operations
                     if "idempotency_key" in self.registry.tools[tool_name].input_schema["properties"]:
                         if "idempotency_key" not in tool_input:
@@ -185,7 +196,9 @@ class AgentOrchestrator:
         for msg in reversed(messages):
             if msg["role"] == "assistant":
                 for block in msg.get("content", []):
-                    if isinstance(block, dict) and block.get("type") == "text":
+                    if hasattr(block, 'type') and block.type == "text":
+                        return block.text
+                    elif isinstance(block, dict) and block.get("type") == "text":
                         return block["text"]
                     elif isinstance(block, str):
                         return block
