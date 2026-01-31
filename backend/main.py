@@ -27,6 +27,7 @@ def health():
 def agent_run(request: AgentRequest):
     """Main agent endpoint"""
     logger.info(f"Agent run request for project={request.project_ref}, sprint={request.sprint_ref}")
+    logger.info(f"Request JSON: {request.model_dump_json()}")
     
     try:
         orchestrator = AgentOrchestrator()

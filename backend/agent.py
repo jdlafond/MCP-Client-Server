@@ -89,6 +89,9 @@ class AgentOrchestrator:
                     tools=tools,
                     system=SYSTEM_PROMPT
                 )
+                logger.info(f"Claude response: stop_reason={response['stop_reason']}, content_blocks={len(response['content'])}")
+                for block in response['content']:
+                    logger.info(f"Content block: {block}")
             except Exception as e:
                 logger.error(f"Anthropic API error: {e}")
                 warnings.append(f"LLM error: {str(e)}")

@@ -1,141 +1,183 @@
-# Backend — FastAPI + In-Process MCP + Anthropic + Taiga
+# MCP-Client-Server Backend
 
-This backend is a **single-process agent service** that:
-- exposes an HTTP API to the mobile app,
-- calls **Anthropic Claude Messages API** with **tool use enabled**,
-- runs a bounded **multi-step tool-call loop** (no streaming),
-- executes Taiga operations through an **in-process MCP-style tool registry**,
-- exposes tools dynamically based on **Taiga role permissions**.
+FastAPI backend with Anthropic Claude + in-process MCP tool registry for Taiga.
 
-> Tool use is implemented using the Claude Messages API `tools` parameter (JSON schema per tool). :contentReference[oaicite:0]{index=0}
+## Architecture
 
-## Three-Component Architecture
+- **FastAPI** HTTP server
+- **Anthropic Claude** Messages API with tool use
+- **In-process MCP** tool registry (no separate server)
+- **Bounded multi-step loop** with budgets and dedupe
+- **Role-based tool exposure** from Taiga permissions
 
-1. Expo Client (calls this backend)
-2. This Backend (LLM + MCP tooling in same process)
-3. Taiga API (external)
+## Setup
 
-There is **no separate MCP server process** and no MCP transport layer for this prototype.
-We keep MCP semantics (tool registry + schemas + invocations) internally for clean separation and future extraction.
+### Prerequisites
 
-## Responsibilities
+- Python 3.11+
+- Anthropic API key
+- Taiga account with API access
 
-### HTTP Layer (FastAPI)
-- `POST /agent/run` — main entry point
-- Optional `GET /agent/tools` — debug endpoint returning tool exposure for the current role
+### Installation
 
-### Agent Orchestrator
-- builds tool manifest (filtered by role permissions)
-- calls Claude with tool schemas
-- executes tool calls (Taiga API)
-- enforces budgets + dedupe to prevent recursion loops
-- returns final summary + created Taiga artifacts
+```bash
+# Install dependencies
+pip install -r requirements.txt
 
-### In-process MCP Layer (Registry + Executor)
-- `list_tools(context) -> [tool schemas]`
-- `call_tool(name, args, context) -> result`
-- schema validation (Pydantic → JSON Schema)
-- permission gating per tool
+# Configure .env file with your API key and model
+```
 
-### Taiga Client
-- wraps Taiga REST API
-- normalizes responses into stable shapes for the LLM + client
+### Run Locally
 
-## Role-Based Tooling Model (Taiga Permissions)
+```bash
+# From repo root
+uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000
+```
 
-Tool exposure is derived from Taiga role permissions like:
-- `view_project`, `view_milestones`, `view_us`, `view_tasks`
-- `add_us`, `modify_us`, `delete_us`
-- `add_task`, `modify_task`, `delete_task`
+The `.env` file is automatically loaded. Server runs at `http://localhost:8000`
 
-Example: role `"back"` includes full CRUD for user stories and tasks (per your role dump), so the tool set includes both read and write tools.
+### Run with Docker
 
-### Tool gating rule
-A tool declares `required_permissions: set[str]`.
-A tool is exposed **only if**:
-`required_permissions ⊆ user_permissions`.
+```bash
+# Build
+docker build -t mcp-backend .
 
-This keeps tool exposure consistent with Taiga RBAC.
+# Run
+docker run -p 8000:8000 -e ANTHROPIC_API_KEY=your_key_here mcp-backend
+```
 
-## Taiga Tool Set (Minimal for “minutes → Sprint 6”)
+## API Endpoints
 
-**Read tools**
-- `taiga.get_project` (requires `view_project`)
-- `taiga.list_milestones` (requires `view_milestones`)
-- `taiga.get_milestone_by_name` (requires `view_milestones`)
-- `taiga.list_user_stories` (requires `view_us`)
+### GET /health
 
-**Write tools**
-- `taiga.create_user_story` (requires `add_us`)
-- `taiga.create_task` (requires `add_task`)
-- `taiga.update_user_story` (requires `modify_us`) [optional]
-- `taiga.update_task` (requires `modify_task`) [optional]
+Health check.
 
-Keep the surface area small. Anthropic notes that large tool catalogs increase wrong-tool and wrong-parameter failures, and can add substantial token overhead. :contentReference[oaicite:1]{index=1}
+**Response:**
+```json
+{"status": "ok"}
+```
 
-## Multi-Step Invocation (Tool-Call Loop)
+### POST /agent/run
 
-We run a bounded loop in the backend:
+Execute agent task.
 
-1. Build `allowed_tools` from role permissions.
-2. Call Claude with:
-   - system instruction (tool discipline)
-   - user prompt (minutes + request)
-   - `tools`: allowed tool schemas
-3. If Claude returns tool calls:
-   - validate
-   - authorize (permission set)
-   - execute tool (Taiga API)
-   - append tool results to message history
-   - iterate
-4. Stop when:
-   - Claude returns a message without tool use
-   - budget exhausted
-   - loop detected
-
-### Budget defaults (prototype)
-- `deadline_seconds`: 30
-- `max_steps`: 10
-- `max_total_tool_calls`: 25
-- `max_write_calls`: 15
-- `max_repeated_call_hash`: 2 (same tool+args repeating)
-
-### Loop detection
-Compute a hash of `(tool_name + normalized_args)` per call.
-If the same hash repeats > 2, abort with a warning.
-
-### Idempotency for writes
-For every mutating tool call:
-- require `idempotency_key` (generated by orchestrator)
-- keep an in-memory map for the request:
-  - if the same key appears again, return the prior result without re-posting
-
-This prevents duplicate user stories/tasks if the model retries.
-
-## Anthropic Integration (Tool Use)
-
-We use Anthropic’s Messages API with tool definitions:
-- each tool has `name`, `description`, and `input_schema` (JSON Schema). :contentReference[oaicite:2]{index=2}
-
-Implementation options:
-- Manual loop: you manage tool calls + tool results.
-- Tool runner (SDK): can automate the loop (beta). :contentReference[oaicite:3]{index=3}
-
-For a prototype with strict budgets, manual loop is often clearer:
-- you can hard-stop steps/time
-- you can enforce write budgets and dedupe
-
-## HTTP API
-
-### `POST /agent/run`
-
-**Request**
+**Request:**
 ```json
 {
   "project_ref": "my-project",
   "sprint_ref": "Sprint 6",
-  "prompt": "MEETING MINUTES...\n\nCreate user stories and tasks and add them to Sprint 6."
+  "prompt": "MEETING MINUTES...\n\nCreate user stories and tasks for Sprint 6.",
+  "auth_token": "your_taiga_bearer_token",
+  "refresh": "your_refresh_token",
+  "user_context": {
+    "id": 738718,
+    "username": "jdlafond",
+    "email": "jdlafond@asu.edu",
+    "roles": ["Back", "Product Owner"]
+  }
 }
 ```
-### Starting the uvicorn app
-uvicorn mddain:app --reload --host <EC2_PUBLIC_IP> --port 8000
+
+**Response:**
+```json
+{
+  "summary": "Created 3 user stories and 9 tasks in Sprint 6.",
+  "artifacts": {
+    "milestone_id": 12345,
+    "user_stories": [
+      {
+        "id": 111,
+        "subject": "As a user, I can log workouts",
+        "tasks": [
+          {"id": 9001, "subject": "Create workout log screen"}
+        ]
+      }
+    ]
+  },
+  "warnings": []
+}
+```
+
+## Example cURL
+
+```bash
+curl -X POST http://localhost:8000/agent/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_ref": "my-project",
+    "sprint_ref": "Sprint 6",
+    "prompt": "Create a user story for login feature with 2 tasks",
+    "auth_token": "YOUR_TAIGA_TOKEN",
+    "refresh": "YOUR_REFRESH_TOKEN",
+    "user_context": {
+      "id": 1,
+      "username": "test",
+      "email": "test@example.com",
+      "roles": ["Back"]
+    }
+  }'
+```
+
+## Tool Registry
+
+Tools are exposed based on Taiga role permissions:
+
+**Read tools:**
+- `taiga_get_project` (requires `view_project`)
+- `taiga_list_milestones` (requires `view_milestones`)
+- `taiga_get_milestone_by_name` (requires `view_milestones`)
+- `taiga_list_user_stories` (requires `view_us`)
+
+**Write tools:**
+- `taiga_create_user_story` (requires `add_us`)
+- `taiga_create_task` (requires `add_task`)
+
+## Budgets
+
+- `deadline_seconds`: 30
+- `max_steps`: 10
+- `max_total_tool_calls`: 25
+- `max_write_calls`: 15
+- `max_repeated_call_hash`: 2
+
+## Project Structure
+
+```
+backend/
+├── main.py              # FastAPI app
+├── agent.py             # Orchestrator loop
+├── models/
+│   ├── agent_models.py  # Request/response types
+│   └── taiga_models.py  # Taiga DTOs
+├── services/
+│   ├── anthropic_client.py
+│   └── http_client.py
+├── tools/
+│   ├── registry.py      # Tool registration + gating
+│   └── taiga.py         # Taiga API client
+├── permissions/
+│   └── permissions.py   # Role → permission mapping
+└── utils/
+    ├── errors.py
+    ├── hashing.py
+    └── logging.py
+```
+
+## Development
+
+Run tests (when implemented):
+```bash
+pytest
+```
+
+Format code:
+```bash
+black backend/
+```
+
+## Notes
+
+- Auth tokens are never logged
+- Idempotency prevents duplicate writes
+- Loop detection stops infinite recursion
+- Partial results returned on budget exhaustion
