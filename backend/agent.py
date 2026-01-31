@@ -176,8 +176,9 @@ class AgentOrchestrator:
             if not has_tool_use:
                 break
             
-            # Add tool results to messages
-            messages.append({"role": "user", "content": tool_results})
+            # Add tool results to messages (only if we have results)
+            if tool_results:
+                messages.append({"role": "user", "content": tool_results})
         
         taiga_client.close()
         
