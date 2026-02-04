@@ -14,6 +14,7 @@ class AgentRequest(BaseModel):
     auth_token: str
     refresh: str
     user_context: UserContext
+    user_story_id: Optional[int] = None
 
 class TaskArtifact(BaseModel):
     id: int

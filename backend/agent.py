@@ -61,7 +61,7 @@ You have access to tools for reading and creating user stories and tasks in Taig
 Context for this request:
 - Project ID: {request.project_id}
 - Milestone ID: {request.milestone_id}
-- User Story ID: {request.milestone_id} optional
+- User Story ID: {request.user_story_id if request.user_story_id else 'Not specified'}
 - Requester: {request.user_context.username} ({request.user_context.email})
 - Requester roles: {', '.join(request.user_context.roles)}
 
