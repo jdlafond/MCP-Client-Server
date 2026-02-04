@@ -8,8 +8,8 @@ class UserContext(BaseModel):
     roles: List[str]
 
 class AgentRequest(BaseModel):
-    project_ref: str
-    sprint_ref: str
+    project_id: int
+    milestone_id: int
     prompt: str
     auth_token: str
     refresh: str

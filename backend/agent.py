@@ -12,19 +12,6 @@ from backend.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-SYSTEM_PROMPT = """You are an AI assistant that helps manage Taiga project management tasks.
-
-You have access to tools for reading and creating user stories and tasks in Taiga.
-
-When the user provides meeting minutes and asks you to create user stories and tasks:
-1. First, get the project details
-2. Find the target milestone (sprint) by name
-3. Create user stories with clear subjects and descriptions
-4. Create tasks for each user story
-
-Be efficient and avoid redundant tool calls. Always use the idempotency_key parameter for write operations.
-Provide a clear summary of what you created."""
-
 class AgentOrchestrator:
     def __init__(
         self,
@@ -66,6 +53,23 @@ class AgentOrchestrator:
         total_tool_calls = 0
         write_calls = 0
         
+        # Build system prompt with context
+        system_prompt = f"""You are an AI assistant that helps manage Taiga project management tasks.
+
+You have access to tools for reading and creating user stories and tasks in Taiga.
+
+Context for this request:
+- Project ID: {request.project_id}
+- Milestone ID: {request.milestone_id}
+- User Story ID: {request.milestone_id} optional
+- Requester: {request.user_context.username} ({request.user_context.email})
+- Requester roles: {', '.join(request.user_context.roles)}
+
+When creating user stories and tasks, use the project_id and milestone_id provided above.
+Be efficient and avoid redundant tool calls. If the user supplies a user story id they intend to modify that or its tasks.
+Always use the idempotency_key parameter for write operations.
+Provide a clear summary of what you created."""
+        
         # Message history
         messages = [{"role": "user", "content": request.prompt}]
         
@@ -87,7 +91,7 @@ class AgentOrchestrator:
                 response = self.anthropic.create_message(
                     messages=messages,
                     tools=tools,
-                    system=SYSTEM_PROMPT
+                    system=system_prompt
                 )
                 logger.info(f"Claude response: stop_reason={response['stop_reason']}, content_blocks={len(response['content'])}")
                 for block in response['content']:

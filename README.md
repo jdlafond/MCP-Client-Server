@@ -64,8 +64,8 @@ Execute agent task.
 **Request:**
 ```json
 {
-  "project_ref": "my-project",
-  "sprint_ref": "Sprint 6",
+  "project_id": 1729875,
+  "milestone_id": 499548,
   "prompt": "MEETING MINUTES...\n\nCreate user stories and tasks for Sprint 6.",
   "auth_token": "your_taiga_bearer_token",
   "refresh": "your_refresh_token",
@@ -104,8 +104,9 @@ Execute agent task.
 curl -X POST http://localhost:8000/agent/run \
   -H "Content-Type: application/json" \
   -d '{
-    "project_ref": "my-project",
-    "sprint_ref": "Sprint 6",
+    "project_id": 1729875,
+    "milestone_id": 499548,
+    "user_story_id": 123456, --optional
     "prompt": "Create a user story for login feature with 2 tasks",
     "auth_token": "YOUR_TAIGA_TOKEN",
     "refresh": "YOUR_REFRESH_TOKEN",
