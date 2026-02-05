@@ -38,9 +38,9 @@ class TaigaClient:
             logger.error(f"Taiga POST {endpoint} failed: {e.response.status_code}")
             raise TaigaError(f"Taiga API error: {e.response.status_code}")
     
-    def get_project(self, project_ref: str) -> TaigaProject:
-        """Get project by slug or ID"""
-        data = self._get(f"/projects/by_slug?slug={project_ref}")
+    def get_project(self, project_id: int) -> TaigaProject:
+        """Get project by ID"""
+        data = self._get(f"/projects/{project_id}")
         return TaigaProject(id=data["id"], name=data["name"], slug=data["slug"])
     
     def list_milestones(self, project_id: int) -> List[TaigaMilestone]:
@@ -48,13 +48,10 @@ class TaigaClient:
         data = self._get(f"/milestones?project={project_id}")
         return [TaigaMilestone(id=m["id"], name=m["name"], project=m["project"]) for m in data]
     
-    def get_milestone_by_name(self, project_id: int, sprint_ref: str) -> Optional[TaigaMilestone]:
-        """Find milestone by name"""
-        milestones = self.list_milestones(project_id)
-        for m in milestones:
-            if m.name.lower() == sprint_ref.lower():
-                return m
-        return None
+    def get_milestone(self, milestone_id: int) -> TaigaMilestone:
+        """Get milestone by ID"""
+        data = self._get(f"/milestones/{milestone_id}")
+        return TaigaMilestone(id=data["id"], name=data["name"], project=data["project"])
     
     def list_user_stories(self, project_id: int, milestone_id: Optional[int] = None) -> List[TaigaUserStory]:
         """List user stories, optionally filtered by milestone"""

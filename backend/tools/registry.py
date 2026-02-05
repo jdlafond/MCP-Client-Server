@@ -26,13 +26,13 @@ class ToolRegistry:
         # Read tools
         self.register(Tool(
             name="taiga_get_project",
-            description="Get project details by slug or ID",
+            description="Get project details by ID",
             input_schema={
                 "type": "object",
                 "properties": {
-                    "project_ref": {"type": "string", "description": "Project slug or ID"}
+                    "project_id": {"type": "integer", "description": "Project ID"}
                 },
-                "required": ["project_ref"]
+                "required": ["project_id"]
             },
             required_permissions={"view_project"},
             handler=self._handle_get_project
@@ -53,18 +53,17 @@ class ToolRegistry:
         ))
         
         self.register(Tool(
-            name="taiga_get_milestone_by_name",
-            description="Find a milestone by name (e.g., 'Sprint 6')",
+            name="taiga_get_milestone",
+            description="Get milestone by ID",
             input_schema={
                 "type": "object",
                 "properties": {
-                    "project_id": {"type": "integer", "description": "Project ID"},
-                    "sprint_ref": {"type": "string", "description": "Sprint name"}
+                    "milestone_id": {"type": "integer", "description": "Milestone ID"}
                 },
-                "required": ["project_id", "sprint_ref"]
+                "required": ["milestone_id"]
             },
             required_permissions={"view_milestones"},
-            handler=self._handle_get_milestone_by_name
+            handler=self._handle_get_milestone
         ))
         
         self.register(Tool(
@@ -169,18 +168,16 @@ class ToolRegistry:
     
     # Tool handlers
     def _handle_get_project(self, client: TaigaClient, args: Dict[str, Any]) -> Dict[str, Any]:
-        project = client.get_project(args["project_ref"])
+        project = client.get_project(args["project_id"])
         return {"id": project.id, "name": project.name, "slug": project.slug}
     
     def _handle_list_milestones(self, client: TaigaClient, args: Dict[str, Any]) -> List[Dict[str, Any]]:
         milestones = client.list_milestones(args["project_id"])
         return [{"id": m.id, "name": m.name, "project": m.project} for m in milestones]
     
-    def _handle_get_milestone_by_name(self, client: TaigaClient, args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        milestone = client.get_milestone_by_name(args["project_id"], args["sprint_ref"])
-        if milestone:
-            return {"id": milestone.id, "name": milestone.name, "project": milestone.project}
-        return None
+    def _handle_get_milestone(self, client: TaigaClient, args: Dict[str, Any]) -> Dict[str, Any]:
+        milestone = client.get_milestone(args["milestone_id"])
+        return {"id": milestone.id, "name": milestone.name, "project": milestone.project}
     
     def _handle_list_user_stories(self, client: TaigaClient, args: Dict[str, Any]) -> List[Dict[str, Any]]:
         stories = client.list_user_stories(args["project_id"], args.get("milestone_id"))
