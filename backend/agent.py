@@ -3,8 +3,7 @@ import uuid
 from typing import Dict, Any, List
 from collections import defaultdict
 from backend.services.anthropic_client import AnthropicClient
-from backend.tools.registry import ToolRegistry, get_user_permissions
-from backend.tools.taiga import TaigaClient
+from backend.services.mcp_client import MCPClient
 from backend.models.agent_models import AgentRequest, AgentResponse, Artifacts, UserStoryArtifact, TaskArtifact
 from backend.utils.hashing import hash_tool_call
 from backend.utils.errors import BudgetExceededError, LoopDetectedError
@@ -28,7 +27,7 @@ class AgentOrchestrator:
         self.max_repeated_call_hash = max_repeated_call_hash
         
         self.anthropic = AnthropicClient()
-        self.registry = ToolRegistry()
+        self.mcp_client = MCPClient()
     
     def run(self, request: AgentRequest) -> AgentResponse:
         """Execute agent loop with budgets and dedupe"""
@@ -36,9 +35,7 @@ class AgentOrchestrator:
         warnings = []
         
         # Setup
-        user_permissions = get_user_permissions(request.user_context.roles)
-        taiga_client = TaigaClient(request.auth_token)
-        tools = self.registry.list_tools(user_permissions)
+        tools = self.mcp_client.list_tools(request.user_context.roles)
         
         if not tools:
             return AgentResponse(
@@ -133,7 +130,7 @@ Provide a clear summary of what you created."""
                     continue
                 
                 # Add idempotency key for write operations
-                if "idempotency_key" in self.registry.tools[tool_name].input_schema["properties"]:
+                if tool_name.startswith("taiga_create"):
                     if "idempotency_key" not in tool_input:
                         tool_input["idempotency_key"] = str(uuid.uuid4())
                 
@@ -157,12 +154,11 @@ Provide a clear summary of what you created."""
                 # Execute tool
                 try:
                     logger.info(f"Calling tool: {tool_name}")
-                    result = self.registry.call_tool(
+                    result = self.mcp_client.call_tool(
                         tool_name,
                         tool_input,
-                        user_permissions,
-                        taiga_client,
-                        idempotency_cache
+                        request.auth_token,
+                        request.user_context.roles
                     )
                     tool_results.append({
                         "type": "tool_result",
@@ -184,7 +180,7 @@ Provide a clear summary of what you created."""
             # Must add tool results if we had tool use
             messages.append({"role": "user", "content": tool_results})
         
-        taiga_client.close()
+        self.mcp_client.close()
         
         # Extract summary and artifacts
         summary = self._extract_summary(messages)

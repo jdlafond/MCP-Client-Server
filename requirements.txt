@@ -5,3 +5,4 @@ httpx
 anthropic
 python-dotenv
 tenacity
+mcp
